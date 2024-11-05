@@ -4,19 +4,21 @@ using UnityEngine;
 
 public class CityGenerator : MonoBehaviour
 {
+    // Script is in the CityManager game object
+    
     [Header("City Settings")]
-    public int cityWidth = 10;             // Number of blocks wide
-    public int cityLength = 10;            // Number of blocks long
-    public float blockSpacing = 1.2f;      // Space between buildings
+    public int cityWidth = 10;             
+    public int cityLength = 10;            
+    public float blockSpacing = 1.2f;      
 
     [Header("Building Settings")]
-    public GameObject buildingPrefab;      // The building prefab
-    public int minBuildingHeight = 1;      // Minimum height for a building
-    public int maxBuildingHeight = 5;      // Maximum height for a building
+    public GameObject buildingPrefab;
+    public int minBuildingHeight = 1;     
+    public int maxBuildingHeight = 5;      
 
     [Header("Road Settings")]
-    public GameObject roadPrefab;          // Road prefab
-    public int roadFrequency = 4;          // Frequency of roads (every X blocks)
+    public GameObject roadPrefab;          
+    public int roadFrequency = 4;         
 
     private void Start()
     {
@@ -26,7 +28,7 @@ public class CityGenerator : MonoBehaviour
     // Generates the entire city
     public void GenerateCity()
     {
-        // Clear existing city (if regenerating)
+        // Regenerate the city - Destroy all children
         foreach (Transform child in transform)
         {
             Destroy(child.gameObject);
@@ -37,30 +39,26 @@ public class CityGenerator : MonoBehaviour
         {
             for (int z = 0; z < cityLength; z++)
             {
-                Vector3 position = new Vector3(x * blockSpacing, 0, z * blockSpacing);
+                Vector3 position = new Vector3(x * blockSpacing, 0, z * blockSpacing); // Block spacing is the distance between each block
 
-                // Road creation: Create roads at intervals (e.g., every 4 blocks)
-                if (x % roadFrequency == 0 || z % roadFrequency == 0)
+                
+                if (x % roadFrequency == 0 || z % roadFrequency == 0) // How often to place a road, check inspector to see the value
                 {
-                    Instantiate(roadPrefab, position, Quaternion.identity, transform);
-                    continue;  // Skip building placement for roads
+                    Instantiate(roadPrefab, position, Quaternion.identity, transform); // Create a road
+                    continue;
                 }
-
-                // Determine building height
-                int buildingHeight = Random.Range(minBuildingHeight, maxBuildingHeight + 1);
-
-                // Create the building at the calculated position
-                GameObject building = Instantiate(buildingPrefab, position, Quaternion.identity, transform);
-
-                // Scale building height
-                building.transform.localScale = new Vector3(1, buildingHeight, 1);
+                
+                int buildingHeight = Random.Range(minBuildingHeight, maxBuildingHeight + 1); // Building height can see the inspector to see the value
+                
+                GameObject building = Instantiate(buildingPrefab, position, Quaternion.identity, transform); // After the roads are created, create the buildings
+                
+                building.transform.localScale = new Vector3(1, buildingHeight, 1); // Scale the building on the Y-axis
                 building.transform.position += new Vector3(0, buildingHeight / 2f, 0); // Center on Y-axis
             }
         }
     }
-
-    // Regenerate the city on command
-    private void Update()
+    
+    private void Update() // Update the city when the R key is pressed, for testing purposes - Add a button in the UI later
     {
         if (Input.GetKeyDown(KeyCode.R))
         {
