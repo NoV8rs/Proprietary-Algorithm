@@ -1,6 +1,8 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 public class CityGenerator : MonoBehaviour
 {
@@ -32,14 +34,35 @@ public class CityGenerator : MonoBehaviour
     public float randomizeSpawnRate = 0.02f;
 
     private bool[,] isRoad;
+    private bool isGenerating = false;
 
     private void Start()
     {
         StartCoroutine(GenerateCity());
     }
 
+    void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            Application.Quit();
+        }
+    }
+    
+    private void ClearCity()
+    {
+        foreach (Transform child in transform)
+        {
+            Destroy(child.gameObject);
+        }
+    }
+
     private IEnumerator GenerateCity()
     {
+        if (isGenerating) yield break;
+        isGenerating = true;
+        
+        ClearCity();
         isRoad = new bool[cityWidth, cityLength];
 
         // Phase 1: Base Road Generation
@@ -53,6 +76,8 @@ public class CityGenerator : MonoBehaviour
         
         // Phase 4: Place stop signs
         yield return StartCoroutine(PlaceStopSignsWithDelay());
+        
+        isGenerating = false;
     }
 
     private IEnumerator GenerateBaseRoadLayout()

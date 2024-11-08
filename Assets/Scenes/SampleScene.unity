@@ -896,6 +896,7 @@ MonoBehaviour:
   stopSignOffset: 0.5
   roadSpawnDelay: 0.005
   buildingSpawnDelay: 0.005
+  stopSignSpawnDelay: 0.05
   randomizeSpawnRate: 0
 --- !u!4 &1445581557
 Transform:
