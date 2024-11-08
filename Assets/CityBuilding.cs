@@ -10,10 +10,9 @@ public class CityGenerator : MonoBehaviour
     public float blockSpacing = 1.2f;
 
     [Header("Building Settings")]
-    public GameObject[] buildingPrefabs;
+    public GameObject buildingPrefab;
     public int minBuildingHeight = 1;
     public int maxBuildingHeight = 5;
-    public Color[] buildingColors;
 
     [Header("Road Settings")]
     public GameObject roadPrefab;
@@ -21,11 +20,16 @@ public class CityGenerator : MonoBehaviour
     public GameObject roadCornerPrefab;
     public GameObject roadEndPrefab;
     public int roadFrequency = 4;
-    
+
+    [Header("Stop Sign Settings")]
+    public GameObject stopSignPrefab; // Add your stop sign prefab here
+    public float stopSignOffset = 0.5f; // Offset from the center of the intersection
+
     [Header("Spawn Delay Settings")]
-    public float randomizeSpawnDelay = 0.1f;
+    public float roadSpawnDelay = 0.05f;
     public float buildingSpawnDelay = 0.1f;
-    public float roadSpawnDelay = 0.1f;
+    public float stopSignSpawnDelay = 0.1f;
+    public float randomizeSpawnRate = 0.02f;
 
     private bool[,] isRoad;
 
@@ -33,21 +37,26 @@ public class CityGenerator : MonoBehaviour
     {
         StartCoroutine(GenerateCity());
     }
-    
-    private void DestroyPreviousCity()
-    {
-        foreach (Transform child in transform)
-        {
-            Destroy(child.gameObject);
-        }
-    }
 
     private IEnumerator GenerateCity()
     {
-        DestroyPreviousCity();
-        
         isRoad = new bool[cityWidth, cityLength];
 
+        // Phase 1: Base Road Generation
+        yield return StartCoroutine(GenerateBaseRoadLayout());
+
+        // Phase 2: Road Decoration and Stop Signs
+        yield return StartCoroutine(DetailRoadsWithDelay());
+
+        // Phase 3: Building Placement
+        yield return StartCoroutine(GenerateBuildingsWithDelay());
+        
+        // Phase 4: Place stop signs
+        yield return StartCoroutine(PlaceStopSignsWithDelay());
+    }
+
+    private IEnumerator GenerateBaseRoadLayout()
+    {
         for (int x = 0; x < cityWidth; x++)
         {
             for (int z = 0; z < cityLength; z++)
@@ -58,13 +67,34 @@ public class CityGenerator : MonoBehaviour
                 }
             }
         }
+        yield return null;
+    }
+    
+    private IEnumerator PlaceStopSignsWithDelay()
+    {
+        for (int x = 0; x < cityWidth; x++)
+        {
+            for (int z = 0; z < cityLength; z++)
+            {
+                if (isRoad[x, z])
+                {
+                    Vector3 position = new Vector3(x * blockSpacing, 0, z * blockSpacing);
+                    (GameObject roadToPlace, Quaternion rotation) = DetermineRoadPrefab(isRoad, x, z);
 
-        yield return StartCoroutine(GenerateRoadsWithDelay());
-
-        yield return StartCoroutine(GenerateBuildingsWithDelay());
+                    if (roadToPlace == roadIntersectionPrefab)
+                    {
+                        SpawnStopSigns(position);
+                        
+                        float randomDelay = stopSignSpawnDelay + Random.Range(-randomizeSpawnRate, randomizeSpawnRate);
+                        yield return new WaitForSeconds(Mathf.Max(0, randomDelay));
+                    }
+                }
+            }
+        }
+        yield return null;
     }
 
-    private IEnumerator GenerateRoadsWithDelay()
+    private IEnumerator DetailRoadsWithDelay()
     {
         for (int x = 0; x < cityWidth; x++)
         {
@@ -80,11 +110,32 @@ public class CityGenerator : MonoBehaviour
                         Instantiate(roadToPlace, position, rotation, transform);
                     }
 
-                    // Apply randomized spawn delay for roads
-                    float randomDelay = roadSpawnDelay + Random.Range(-randomizeSpawnDelay, randomizeSpawnDelay);
+                    float randomDelay = roadSpawnDelay + Random.Range(-randomizeSpawnRate, randomizeSpawnRate);
                     yield return new WaitForSeconds(Mathf.Max(0, randomDelay));
                 }
             }
+        }
+    }
+
+    private void SpawnStopSigns(Vector3 intersectionPosition)
+    {
+        intersectionPosition.y = 0.5f;
+        
+        Vector3[] stopSignPositions = new Vector3[]
+        {
+            intersectionPosition + new Vector3(-stopSignOffset, 0, stopSignOffset),
+            intersectionPosition + new Vector3(stopSignOffset, 0, -stopSignOffset)
+        };
+
+        Quaternion[] stopSignRotations = new Quaternion[]
+        {
+            Quaternion.Euler(0, 90, 0),
+            Quaternion.Euler(0, -180, 0)
+        };
+
+        for (int i = 0; i < stopSignPositions.Length; i++)
+        {
+            Instantiate(stopSignPrefab, stopSignPositions[i], stopSignRotations[i], transform);
         }
     }
 
@@ -99,16 +150,12 @@ public class CityGenerator : MonoBehaviour
                     Vector3 position = new Vector3(x * blockSpacing, 0, z * blockSpacing);
 
                     int buildingHeight = Random.Range(minBuildingHeight, maxBuildingHeight + 1);
-                    GameObject buildingPrefab = buildingPrefabs[Random.Range(0, buildingPrefabs.Length)];
                     GameObject building = Instantiate(buildingPrefab, position, Quaternion.identity, transform);
 
                     building.transform.localScale = new Vector3(1, buildingHeight, 1);
                     building.transform.position += new Vector3(0, buildingHeight / 2f, 0);
-                    
-                    Color buildingColor = buildingColors[Random.Range(0, buildingColors.Length)];
-                    Renderer buildingRenderer = buildingPrefab.GetComponent<Renderer>();
-                    
-                    float randomDelay = buildingSpawnDelay + Random.Range(-randomizeSpawnDelay, randomizeSpawnDelay);
+
+                    float randomDelay = buildingSpawnDelay + Random.Range(-randomizeSpawnRate, randomizeSpawnRate);
                     yield return new WaitForSeconds(Mathf.Max(0, randomDelay));
                 }
             }
@@ -125,7 +172,7 @@ public class CityGenerator : MonoBehaviour
 
         if (adjacentRoads == 1)
         {
-            if (left) return (roadEndPrefab, Quaternion.Euler(0, 90, 0));
+            if (left) return (roadEndPrefab, Quaternion.Euler(0, 180, 0));
             if (right) return (roadEndPrefab, Quaternion.Euler(0, -180, 0));
             if (down) return (roadEndPrefab, Quaternion.Euler(0, 90, 0));
             return (roadEndPrefab, Quaternion.identity);
@@ -135,8 +182,8 @@ public class CityGenerator : MonoBehaviour
             if (left && right) return (roadPrefab, Quaternion.Euler(0, 180, 0));
             if (up && down) return (roadPrefab, Quaternion.Euler(0, 90, 0));
             if (up && right) return (roadCornerPrefab, Quaternion.Euler(0, 90, 0));
-            if (up && left) return (roadCornerPrefab, Quaternion.Euler(0, 180, 0));
-            if (down && right) return (roadCornerPrefab, Quaternion.Euler(0, -90, 0));
+            if (up && left) return (roadCornerPrefab, Quaternion.Euler(0, 0, 0));
+            if (down && right) return (roadCornerPrefab, Quaternion.Euler(0, -180, 0));
             return (roadCornerPrefab, Quaternion.Euler(0, 180, 0));
         }
         else if (adjacentRoads >= 3)
