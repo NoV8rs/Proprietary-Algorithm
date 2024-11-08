@@ -13,6 +13,7 @@ public class CityGenerator : MonoBehaviour
     public GameObject[] buildingPrefabs;
     public int minBuildingHeight = 1;
     public int maxBuildingHeight = 5;
+    public Color[] buildingColors;
 
     [Header("Road Settings")]
     public GameObject roadPrefab;
@@ -20,23 +21,33 @@ public class CityGenerator : MonoBehaviour
     public GameObject roadCornerPrefab;
     public GameObject roadEndPrefab;
     public int roadFrequency = 4;
+    
+    [Header("Spawn Delay Settings")]
+    public float randomizeSpawnDelay = 0.1f;
+    public float buildingSpawnDelay = 0.1f;
+    public float roadSpawnDelay = 0.1f;
+
+    private bool[,] isRoad;
 
     private void Start()
     {
-        GenerateCity();
+        StartCoroutine(GenerateCity());
     }
     
-    public void GenerateCity()
+    private void DestroyPreviousCity()
     {
         foreach (Transform child in transform)
         {
             Destroy(child.gameObject);
         }
+    }
 
-        // Create a grid to store road positions
-        bool[,] isRoad = new bool[cityWidth, cityLength];
+    private IEnumerator GenerateCity()
+    {
+        DestroyPreviousCity();
+        
+        isRoad = new bool[cityWidth, cityLength];
 
-        // How frequently to place roads
         for (int x = 0; x < cityWidth; x++)
         {
             for (int z = 0; z < cityLength; z++)
@@ -48,36 +59,62 @@ public class CityGenerator : MonoBehaviour
             }
         }
 
-        // Buildings placement and road placement
+        yield return StartCoroutine(GenerateRoadsWithDelay());
+
+        yield return StartCoroutine(GenerateBuildingsWithDelay());
+    }
+
+    private IEnumerator GenerateRoadsWithDelay()
+    {
         for (int x = 0; x < cityWidth; x++)
         {
             for (int z = 0; z < cityLength; z++)
             {
-                Vector3 position = new Vector3(x * blockSpacing, 0, z * blockSpacing);
-
-                // isRoad position
                 if (isRoad[x, z])
                 {
+                    Vector3 position = new Vector3(x * blockSpacing, 0, z * blockSpacing);
                     (GameObject roadToPlace, Quaternion rotation) = DetermineRoadPrefab(isRoad, x, z);
 
                     if (roadToPlace != null)
                     {
                         Instantiate(roadToPlace, position, rotation, transform);
                     }
-                    continue;
-                }
 
-                int buildingHeight = Random.Range(minBuildingHeight, maxBuildingHeight + 1);
-                GameObject buildingPrefab = buildingPrefabs[Random.Range(0, buildingPrefabs.Length)];
-                GameObject building = Instantiate(buildingPrefab, position, Quaternion.identity, transform);
-                
-                building.transform.localScale = new Vector3(1, buildingHeight, 1);
-                building.transform.position += new Vector3(0, buildingHeight / 2f, 0);
+                    // Apply randomized spawn delay for roads
+                    float randomDelay = roadSpawnDelay + Random.Range(-randomizeSpawnDelay, randomizeSpawnDelay);
+                    yield return new WaitForSeconds(Mathf.Max(0, randomDelay));
+                }
             }
         }
     }
 
-    // Spawns the Roads for the City
+    private IEnumerator GenerateBuildingsWithDelay()
+    {
+        for (int x = 0; x < cityWidth; x++)
+        {
+            for (int z = 0; z < cityLength; z++)
+            {
+                if (!isRoad[x, z])
+                {
+                    Vector3 position = new Vector3(x * blockSpacing, 0, z * blockSpacing);
+
+                    int buildingHeight = Random.Range(minBuildingHeight, maxBuildingHeight + 1);
+                    GameObject buildingPrefab = buildingPrefabs[Random.Range(0, buildingPrefabs.Length)];
+                    GameObject building = Instantiate(buildingPrefab, position, Quaternion.identity, transform);
+
+                    building.transform.localScale = new Vector3(1, buildingHeight, 1);
+                    building.transform.position += new Vector3(0, buildingHeight / 2f, 0);
+                    
+                    Color buildingColor = buildingColors[Random.Range(0, buildingColors.Length)];
+                    Renderer buildingRenderer = buildingPrefab.GetComponent<Renderer>();
+                    
+                    float randomDelay = buildingSpawnDelay + Random.Range(-randomizeSpawnDelay, randomizeSpawnDelay);
+                    yield return new WaitForSeconds(Mathf.Max(0, randomDelay));
+                }
+            }
+        }
+    }
+
     private (GameObject, Quaternion) DetermineRoadPrefab(bool[,] isRoad, int x, int z)
     {
         int adjacentRoads = CountAdjacentRoads(isRoad, x, z);
@@ -85,50 +122,46 @@ public class CityGenerator : MonoBehaviour
         bool right = (x < cityWidth - 1 && isRoad[x + 1, z]);
         bool down = (z > 0 && isRoad[x, z - 1]);
         bool up = (z < cityLength - 1 && isRoad[x, z + 1]);
-        
-        if (adjacentRoads == 1) // End cap and Values for rotation
+
+        if (adjacentRoads == 1)
         {
-            if (left) return (roadEndPrefab, Quaternion.Euler(0, 0, 0));
-            if (right) return (roadEndPrefab, Quaternion.Euler(0, 180, 0));
+            if (left) return (roadEndPrefab, Quaternion.Euler(0, 90, 0));
+            if (right) return (roadEndPrefab, Quaternion.Euler(0, -180, 0));
             if (down) return (roadEndPrefab, Quaternion.Euler(0, 90, 0));
-            return (roadEndPrefab, Quaternion.identity); // Up
+            return (roadEndPrefab, Quaternion.identity);
         }
-        else if (adjacentRoads == 2) // Straight or corner and Values for rotation
-        { 
+        else if (adjacentRoads == 2)
+        {
             if (left && right) return (roadPrefab, Quaternion.Euler(0, 180, 0));
             if (up && down) return (roadPrefab, Quaternion.Euler(0, 90, 0));
             if (up && right) return (roadCornerPrefab, Quaternion.Euler(0, 90, 0));
             if (up && left) return (roadCornerPrefab, Quaternion.Euler(0, 180, 0));
-            if (down && right) return (roadCornerPrefab, Quaternion.Euler(0, -180, 0));
+            if (down && right) return (roadCornerPrefab, Quaternion.Euler(0, -90, 0));
             return (roadCornerPrefab, Quaternion.Euler(0, 180, 0));
         }
-        else if (adjacentRoads >= 3) // Intersection
+        else if (adjacentRoads >= 3)
         {
             return (roadIntersectionPrefab, Quaternion.identity);
         }
 
         return (roadPrefab, Quaternion.identity);
     }
-    
+
     private int CountAdjacentRoads(bool[,] isRoad, int x, int z)
     {
         int adjacentRoads = 0;
 
-        // Check all four neighbors (up, down, left, right)
-        if (x > 0 && isRoad[x - 1, z]) adjacentRoads++; // Left
-        if (x < cityWidth - 1 && isRoad[x + 1, z]) adjacentRoads++; // Right
-        if (z > 0 && isRoad[x, z - 1]) adjacentRoads++; // Down
-        if (z < cityLength - 1 && isRoad[x, z + 1]) adjacentRoads++; // Up
+        if (x > 0 && isRoad[x - 1, z]) adjacentRoads++;
+        if (x < cityWidth - 1 && isRoad[x + 1, z]) adjacentRoads++;
+        if (z > 0 && isRoad[x, z - 1]) adjacentRoads++;
+        if (z < cityLength - 1 && isRoad[x, z + 1]) adjacentRoads++;
 
         return adjacentRoads;
     }
     
-    private void Update()
+    public void ButtonGenerate()
     {
-        if (Input.GetKeyDown(KeyCode.R))
-        {
-            GenerateCity();
-        }
+        StartCoroutine(GenerateCity());
     }
 }
 
